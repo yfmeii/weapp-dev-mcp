@@ -1,6 +1,6 @@
 {
   "name": "@yfme/weapp-dev-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "FastMCP server for automating WeChat Mini Program developer tooling",
   "type": "module",
   "bin": {
