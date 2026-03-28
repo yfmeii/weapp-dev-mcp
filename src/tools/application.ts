@@ -54,6 +54,12 @@ const currentPageParameters = connectionContainerSchema.extend({
   withData: z.coerce.boolean().optional().default(false),
 });
 
+const listProjectsParameters = z.object({});
+
+const setDefaultProjectParameters = z.object({
+  projectPath: z.string().trim().min(1),
+});
+
 export function createApplicationTools(
   manager: WeappAutomatorManager
 ): AnyTool[] {
@@ -64,6 +70,8 @@ export function createApplicationTools(
     createCallWxMethodTool(manager),
     createGetConsoleLogsTool(manager),
     createCurrentPageTool(manager),
+    createListProjectsTool(manager),
+    createSetDefaultProjectTool(manager),
   ];
 }
 
@@ -75,6 +83,22 @@ function createEnsureConnectionTool(manager: WeappAutomatorManager): AnyTool {
     parameters: ensureConnectionParameters,
     execute: async (rawArgs, context: ToolContext) => {
       const args = ensureConnectionParameters.parse(rawArgs ?? {});
+      
+      // 如果用户提供了 projectSelection（回复选择），处理它
+      if (args.projectSelection) {
+        const selected = await manager.consumePendingProject(args.projectSelection);
+        if (selected) {
+          // 自动设置默认项目
+          await manager.setDefaultProject(selected.path);
+          context.log.info(`已选择项目: ${selected.name} (${selected.path})`);
+        } else {
+          const hint = await manager.getSelectionHint();
+          throw new UserError(
+            `无效的选择: "${args.projectSelection}"\n\n${hint}`
+          );
+        }
+      }
+      
       const result = await manager.withMiniProgram<ContentResult>(
         context.log,
         {
@@ -108,7 +132,7 @@ function createEnsureConnectionTool(manager: WeappAutomatorManager): AnyTool {
 
       return result;
     },
-    timeoutMs: 30000,
+    timeoutMs: 60000,
   };
 }
 
@@ -308,5 +332,55 @@ function createCurrentPageTool(manager: WeappAutomatorManager): AnyTool {
         }
       );
     },
+  };
+}
+
+function createListProjectsTool(manager: WeappAutomatorManager): AnyTool {
+  return {
+    name: "mp_listProjects",
+    description: "列出微信开发者工具中的最近项目，方便选择项目目录。",
+    parameters: listProjectsParameters,
+    execute: async () => {
+      const projects = await manager.listRecentProjects();
+      const defaultProject = await manager.getDefaultProject();
+      
+      return toTextResult(
+        formatJson({
+          defaultProject,
+          projects: projects.map((p, i) => ({
+            index: i,
+            name: p.name,
+            path: p.path,
+          })),
+        })
+      );
+    },
+    timeoutMs: 10000,
+  };
+}
+
+function createSetDefaultProjectTool(manager: WeappAutomatorManager): AnyTool {
+  return {
+    name: "mp_setDefaultProject",
+    description: "设置默认的小程序项目路径，设置后下次连接会自动使用该项目。",
+    parameters: setDefaultProjectParameters,
+    execute: async (rawArgs) => {
+      const args = setDefaultProjectParameters.parse(rawArgs);
+      const success = await manager.setDefaultProject(args.projectPath);
+      
+      if (success) {
+        return toTextResult(
+          formatJson({
+            success: true,
+            message: `已设置默认项目: ${args.projectPath}`,
+          })
+        );
+      } else {
+        throw new UserError(
+          `无效的项目路径或项目目录不存在: ${args.projectPath}`
+        );
+      }
+    },
+    timeoutMs: 5000,
   };
 }

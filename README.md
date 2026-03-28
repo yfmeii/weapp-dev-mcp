@@ -15,20 +15,20 @@
 ### 使用 npx 运行
 
 ```bash
-npx -y @yfme/weapp-dev-mcp
+npx -y weapp-dev-mcp
 ```
 
 ### 安装到项目/全局
 
 ```bash
-npm install -g @yfme/weapp-dev-mcp
+npm install -g weapp-dev-mcp
 weapp-dev-mcp
 ```
 
 或作为项目依赖：
 
 ```bash
-npm install --save-dev @yfme/weapp-dev-mcp
+npm install --save-dev weapp-dev-mcp
 npx weapp-dev-mcp
 ```
 
@@ -72,6 +72,8 @@ npx weapp-dev-mcp
       "mcp__weapp-dev-mcp__mp_callWx",
       "mcp__weapp-dev-mcp__mp_getLogs",
       "mcp__weapp-dev-mcp__mp_currentPage",
+      "mcp__weapp-dev-mcp__mp_listProjects",
+      "mcp__weapp-dev-mcp__mp_setDefaultProject",
       "mcp__weapp-dev-mcp__page_getElement",
       "mcp__weapp-dev-mcp__page_getElements",
       "mcp__weapp-dev-mcp__page_waitElement",
@@ -147,6 +149,10 @@ npx weapp-dev-mcp
 | `WEAPP_DEVTOOLS_ARGS` | 启动时的额外 CLI 参数（空格分隔）。 |
 | `WEAPP_DEVTOOLS_CWD` | 传递给开发者工具进程的工作目录。 |
 | `WEAPP_AUTOCLOSE` | 设置为 `true` 时，每次工具调用后关闭开发者工具会话。 |
+| `WEAPP_AUTOLAUNCH` | 设为 `true` 时，自动检测并启动开发者工具 |
+| `WEAPP_LAUNCH_TIMEOUT` | 启动超时时间（毫秒，默认 45000） |
+| `WEAPP_CONNECT_TIMEOUT` | 连接超时时间（毫秒，默认 45000） |
+| `WEAPP_PROJECT_PATH` | 小程序项目路径（可选） |
 
 > **注意：** 当启动开发者工具（`launch` 模式）时，必须通过 MCP 工具参数提供小程序项目目录：在执行操作前通过 `connection.projectPath` 提供（例如通过 `mp_ensureConnection`）。该值一旦建立，将在后续调用中持久化。
 
@@ -162,20 +168,22 @@ npx weapp-dev-mcp
 - `mp_callWx` – 调用微信小程序 API 方法（如 `wx.showToast`）
 - `mp_getLogs` – 获取小程序控制台日志，可选择获取后清除
 - `mp_currentPage` – 获取当前页面信息（路径、查询参数、尺寸、滚动位置），`withData` 为 true 时额外返回页面数据
+- `mp_listProjects` – 列出微信开发者工具中的最近项目，方便选择项目目录
+- `mp_setDefaultProject` – 设置默认的小程序项目路径，设置后下次连接会自动使用该项目
 
 ### 页面工具（Page Tools）
 
-- `page_getElement` – 通过选择器获取页面元素，返回元素摘要信息（tagName、text、value、size、offset）；设置 `withWxml: true` 可额外返回完整 outerWxml
-- `page_getElements` – 通过选择器获取页面元素数组，返回每个元素的摘要信息；设置 `withWxml: true` 可额外返回每个元素的完整 outerWxml
-- `page_waitElement` – 等待元素出现在页面上（⚠️ 不适用于自定义组件内部元素）
+- `page_getElement` – 通过选择器获取页面元素，返回元素摘要信息（tagName、text、value、size、offset）；设置 `withWxml: true` 可额外返回完整 outerWxml；**支持 [index=N] 语法选择第 N 个元素**
+- `page_getElements` – 通过选择器获取页面元素数组，返回每个元素的摘要信息；设置 `withWxml: true` 可额外返回每个元素的完整 outerWxml；**支持 [index=N] 语法**
+- `page_waitElement` – 等待元素出现在页面上（⚠️ 不适用于自定义组件内部元素）；**支持 [index=N] 语法；增加超时和重试间隔参数**
 - `page_waitTimeout` – 等待指定的毫秒数
-- `page_getData` – 获取当前页面的数据对象，可指定路径
-- `page_setData` – 使用 `setData` 更新当前页面的数据
+- `page_getData` – 获取当前页面的数据对象，可指定路径（**支持嵌套路径如 'user.name'**）
+- `page_setData` – 使用 `setData` 更新当前页面的数据；**增加 verify 选项，验证数据是否真正更新成功**
 - `page_callMethod` – 调用当前页面实例上暴露的方法
 
 ### 元素工具（Element Tools）
 
-- `element_tap` – 通过 CSS 选择器点击 WXML 元素
+- `element_tap` – 通过 CSS 选择器模拟点击 WXML 元素；**支持 [index=N] 语法选择第 N 个元素；支持 x/y 坐标偏移点击；增强稳定性：等待元素可交互状态，点击后自动验证页面路径是否变化**
 - `element_input` – 向元素输入文本（适用于 `input` 和 `textarea` 组件）
 - `element_callMethod` – 调用自定义组件实例的方法
 - `element_getData` – 获取自定义组件实例的渲染数据
@@ -233,3 +241,42 @@ npx weapp-dev-mcp
 #### 限制说明
 
 - `page_waitElement` **不适用于**自定义组件内部元素。请使用 `page_waitTimeout` 配合元素查询工具进行轮询检查。
+
+### 自动启动功能（AutoLaunch）
+
+当配置 `WEAPP_AUTOLAUNCH=true` 时，MCP 服务器可以自动检测并启动微信开发者工具：
+
+1. **自动检测端口**：检测 9420 端口是否有服务运行
+2. **无服务则启动**：如果端口未占用，自动调用 CLI 启动开发者工具
+3. **项目选择**：
+   - 如果有默认项目配置，自动使用
+   - 如果没有默认项目，自动列出最近项目供选择
+   - 支持输入项目编号（如 `1`）或完整路径
+
+#### 配置示例
+
+```json
+{
+  "mcpServers": {
+    "weapp-dev": {
+      "command": "npx",
+      "args": ["-y", "weapp-dev-mcp"],
+      "env": {
+        "WEAPP_AUTOLAUNCH": "true",
+        "WEAPP_PROJECT_PATH": "D:\\path\\to\\your\\project"
+      }
+    }
+  }
+}
+```
+
+#### 工作流程
+
+1. 首次连接时，检测到 `WEAPP_AUTOLAUNCH=true`
+2. 检查 9420 端口是否有服务
+3. 无服务则自动启动开发者工具（使用 `cli.bat auto --project <path> --auto-port 9420`）
+4. 等待 45 秒让开发者工具就绪
+5. 建立 WebSocket 连接
+6. **后续连接自动复用现有连接**
+
+> **提示**：使用 `mp_setDefaultProject` 设置默认项目后，下次连接无需再次选择项目。

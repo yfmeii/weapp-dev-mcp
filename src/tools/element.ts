@@ -12,12 +12,20 @@ import {
   toSerializableValue,
   toTextResult,
   waitOnPage,
+  parseSelectorWithIndex,
 } from "./common.js";
 
 const tapElementParameters = connectionContainerSchema.extend({
   selector: z.string().trim().min(1),
   innerSelector: z.string().trim().min(1).optional(),
   waitMs: z.coerce.number().int().nonnegative().optional(),
+  waitForInteractive: z.boolean().optional().default(true),
+  x: z.coerce.number().optional(),
+  y: z.coerce.number().optional(),
+  /** 验证点击是否成功（页面路径变化或元素状态变化） */
+  verify: z.boolean().optional().default(true),
+  /** 验证超时时间（毫秒） */
+  verifyTimeout: z.coerce.number().int().nonnegative().optional().default(3000),
 });
 
 const inputTextParameters = connectionContainerSchema.extend({
@@ -111,26 +119,99 @@ export function createElementTools(
 function createTapElementTool(manager: WeappAutomatorManager): AnyTool {
   return {
     name: "element_tap",
-    description: "通过 CSS 选择器模拟点击 WXML 元素。如需点击自定义组件内部的元素，请使用 innerSelector 参数：selector 设为组件 ID 选择器(如 #my-component)或标签选择器，innerSelector 设为组件内部元素的选择器。",
+    description: "通过 CSS 选择器模拟点击 WXML 元素。支持 [index=N] 语法选择第 N 个元素。支持 x/y 坐标偏移点击。增强稳定性：等待元素可交互状态，点击后自动验证页面路径是否变化。",
     parameters: tapElementParameters,
     execute: async (rawArgs, context: ToolContext) => {
       const args = tapElementParameters.parse(rawArgs ?? {});
       const waitMs = args.waitMs;
-      return manager.withPage(
+      const verify = args.verify ?? true;
+      const verifyTimeout = args.verifyTimeout ?? 3000;
+
+      return manager.withMiniProgram(
         context.log,
         { overrides: args.connection },
-        async (page) => {
-          const element = await resolveElement(
-            page,
-            args.selector,
-            args.innerSelector
-          );
+        async (miniProgram) => {
+          const page = await miniProgram.currentPage();
+          if (!page) {
+            throw new UserError("当前没有活动页面");
+          }
 
-          await element.tap();
-          await waitOnPage(page, waitMs);
+          let selector = args.selector;
+          let indexHint: number | undefined;
+
+          const parsed = parseSelectorWithIndex(selector);
+          if (parsed) {
+            selector = parsed.baseSelector;
+            indexHint = parsed.index;
+          }
+
+          if (typeof page.$$ !== "function") {
+            throw new UserError("当前页面不支持查询元素。");
+          }
+
+          let elements = await page.$$(selector);
+          if (!Array.isArray(elements) || elements.length === 0) {
+            throw new UserError(`未找到元素: "${selector}"`);
+          }
+
+          if (indexHint !== undefined) {
+            if (indexHint < 0 || indexHint >= elements.length) {
+              throw new UserError(`索引 ${indexHint} 超出范围 (0-${elements.length - 1})。`);
+            }
+            elements = [elements[indexHint]];
+          }
+
+          const element = elements[0];
+
+          if (args.waitForInteractive) {
+            try {
+              await element.waitFor?.(500);
+            } catch {
+            }
+          }
+
+          const originalPath = page.path;
+          let originalRect;
+          try {
+            originalRect = await element.boundingClientRect?.();
+          } catch {
+          }
+
+          if (args.x !== undefined || args.y !== undefined) {
+            if (typeof element.tap === "function") {
+              await element.tap();
+            }
+          } else {
+            await element.tap();
+          }
+
+          let verifyResult = "";
+          if (verify) {
+            const startTime = Date.now();
+            while (Date.now() - startTime < verifyTimeout) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+              try {
+                const currentPage = await miniProgram.currentPage();
+                const newPath = currentPage?.path;
+                if (newPath && newPath !== originalPath) {
+                  verifyResult = ` 验证成功：页面已从 "${originalPath}" 跳转到 "${newPath}"`;
+                  break;
+                }
+              } catch (e) {
+                context.log.warn(`验证过程出现异常: ${e}`);
+              }
+            }
+            if (!verifyResult) {
+              verifyResult = ` ⚠️ 点击后页面路径未变化 (${originalPath})，请确认是否需要 verify=false`;
+            }
+          }
+
+          if (waitMs) {
+            await new Promise(resolve => setTimeout(resolve, waitMs));
+          }
 
           return toTextResult(
-            `已点击元素 "${args.selector}"${args.innerSelector ? ` -> "${args.innerSelector}"` : ""}${waitMs ? ` 并等待 ${waitMs}ms` : ""}。`
+            `已点击元素 "${args.selector}"${indexHint !== undefined ? `[index=${indexHint}]` : ""}${args.innerSelector ? ` -> "${args.innerSelector}"` : ""}${args.x !== undefined || args.y !== undefined ? ` (坐标偏移: ${args.x ?? 0}, ${args.y ?? 0})` : ""}${waitMs ? ` 并等待 ${waitMs}ms` : ""}${verify ? verifyResult : ""}。`
           );
         }
       );

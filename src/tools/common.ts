@@ -21,6 +21,7 @@ export const connectionOnlyParameters = connectionContainerSchema;
 export const ensureConnectionParameters = connectionContainerSchema
   .extend({
     reconnect: z.coerce.boolean().optional().default(false),
+    projectSelection: z.string().optional(),
   });
 
 export const querySchema = z.record(z.string()).optional();
@@ -250,5 +251,81 @@ export function createFunctionFromSource(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new UserError(`${context} is invalid: ${message}`);
+  }
+}
+
+/**
+ * 解析带索引的选择器语法，如 "view[index=2]" 或 "view[index=2] .child"
+ * 返回 { baseSelector, index } 或 null
+ */
+export function parseSelectorWithIndex(selector: string): { baseSelector: string; index: number } | null {
+  // 匹配 selector[index=N] 语法
+  const match = selector.match(/^(.+?)\[index=(\d+)\]$/);
+  if (match) {
+    return {
+      baseSelector: match[1],
+      index: parseInt(match[2], 10),
+    };
+  }
+  return null;
+}
+
+/**
+ * 等待元素可交互的稳定点击
+ * 增加多重检查确保元素真正可点击
+ */
+export async function waitForElementInteractive(
+  element: any,
+  options?: { timeout?: number; retryInterval?: number }
+): Promise<void> {
+  const timeout = options?.timeout ?? 5000;
+  const retryInterval = options?.retryInterval ?? 100;
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeout) {
+    try {
+      // 检查元素是否可见
+      const visible = await element.isVisible?.();
+      if (visible === true) {
+        return;
+      }
+      // 如果 isVisible 不可用，尝试获取 boundingClientRect
+      const rect = await element.boundingClientRect?.();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        return;
+      }
+    } catch {
+      // 忽略错误继续重试
+    }
+    await new Promise(resolve => setTimeout(resolve, retryInterval));
+  }
+  
+  // 最后尝试一次，不管结果如何都继续
+  try {
+    await element.isVisible?.();
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 验证点击操作是否成功
+ * 通过比较点击前后的元素状态来判断
+ */
+export async function verifyTapAction(
+  element: any,
+  originalRect?: { x: number; y: number; width: number; height: number }
+): Promise<boolean> {
+  try {
+    if (originalRect) {
+      const newRect = await element.boundingClientRect?.();
+      if (newRect) {
+        return Math.abs((newRect as any).left - originalRect.x) < 1 && 
+               Math.abs((newRect as any).top - originalRect.y) < 1;
+      }
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
