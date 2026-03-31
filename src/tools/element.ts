@@ -13,6 +13,8 @@ import {
   toTextResult,
   waitOnPage,
   parseSelectorWithIndex,
+  waitForElementInteractive,
+  verifyTapAction,
 } from "./common.js";
 
 const tapElementParameters = connectionContainerSchema.extend({
@@ -164,10 +166,7 @@ function createTapElementTool(manager: WeappAutomatorManager): AnyTool {
           const element = elements[0];
 
           if (args.waitForInteractive) {
-            try {
-              await element.waitFor?.(500);
-            } catch {
-            }
+            await waitForElementInteractive(element, { timeout: 5000 });
           }
 
           const originalPath = page.path;
@@ -175,12 +174,22 @@ function createTapElementTool(manager: WeappAutomatorManager): AnyTool {
           try {
             originalRect = await element.boundingClientRect?.();
           } catch {
+            originalRect = undefined;
           }
 
+          // 坐标偏移点击：使用 touch 事件模拟（tap() 不支持坐标参数）
           if (args.x !== undefined || args.y !== undefined) {
-            if (typeof element.tap === "function") {
-              await element.tap();
+            const rect = await element.boundingClientRect?.();
+            if (!rect) {
+              throw new UserError("无法获取元素位置，无法进行坐标偏移点击");
             }
+            const touchX = (rect.left || 0) + (args.x ?? 0);
+            const touchY = (rect.top || 0) + (args.y ?? 0);
+            await element.touchstart({
+              touches: [{ clientX: touchX, clientY: touchY }],
+            });
+            await new Promise(res => setTimeout(res, 50));
+            await element.touchend();
           } else {
             await element.tap();
           }
@@ -195,6 +204,11 @@ function createTapElementTool(manager: WeappAutomatorManager): AnyTool {
                 const newPath = currentPage?.path;
                 if (newPath && newPath !== originalPath) {
                   verifyResult = ` 验证成功：页面已从 "${originalPath}" 跳转到 "${newPath}"`;
+                  break;
+                }
+                const tapSuccess = await verifyTapAction(element, originalRect);
+                if (tapSuccess) {
+                  verifyResult = ` 验证成功：点击位置正确`;
                   break;
                 }
               } catch (e) {
