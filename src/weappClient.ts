@@ -508,15 +508,9 @@ export class WeappAutomatorManager {
     let userDataBasePath: string;
     
     if (process.platform === 'darwin') {
-      // macOS 路径1: ~/Library/Application Support/{WECHAT_DEVTOOLS_DIR}/ （开发者工具官方路径）
-      // macOS 路径2: ~/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/ （微信沙盒路径，备用）
+      // macOS 路径1: ~/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/
+      // macOS 路径2: ~/Library/Application Support/{WECHAT_DEVTOOLS_DIR}/
       const macOSPath1 = path.join(
-        os.homedir(),
-        "Library",
-        "Application Support",
-        WeappAutomatorManager.WECHAT_DEVTOOLS_DIR
-      );
-      const macOSPath2 = path.join(
         os.homedir(),
         "Library",
         "Containers",
@@ -526,8 +520,14 @@ export class WeappAutomatorManager {
         "Application Support",
         "com.tencent.xinWeChat"
       );
+      const macOSPath2 = path.join(
+        os.homedir(),
+        "Library",
+        "Application Support",
+        WeappAutomatorManager.WECHAT_DEVTOOLS_DIR
+      );
       
-      // 优先使用路径1（开发者工具官方路径），不存在则尝试路径2（微信沙盒）
+      // 优先使用路径1，不存在则尝试路径2
       try {
         await fs.promises.access(macOSPath1);
         userDataBasePath = macOSPath1;
@@ -646,13 +646,13 @@ export class WeappAutomatorManager {
       }
     };
     
-    // 微信开发者工具的用户数据目录（跨平台）
+    // 微信开发者工具的用户数据目录
     const userDataPath = path.join(
       os.homedir(),
-      process.platform === "win32" ? "AppData" : "Library",
-      process.platform === "win32" ? "Local" : "Application Support",
-      WeappAutomatorManager.WECHAT_DEVTOOLS_DIR,
-      process.platform === "win32" ? "User Data" : ""
+      "AppData",
+      "Local",
+      "微信开发者工具",
+      "User Data"
     );
     
     let userDataDir = userDataPath;
