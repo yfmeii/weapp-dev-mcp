@@ -820,20 +820,17 @@ C. 直接输入项目路径`;
     // 使用配置的 cliPath 或平台默认路径
     const cliPath = config.cliPath || this.getDefaultCliPath();
     if (!cliPath) {
-      log.warn("cliPath not configured and no default path for this platform, cannot auto launch DevTools");
-      return;
+      throw new Error("cliPath not configured and no default path for this platform, cannot auto launch DevTools");
     }
     if (!config.projectPath) {
-      log.warn("projectPath not configured, cannot auto launch DevTools");
-      return;
+      throw new Error("projectPath not configured, cannot auto launch DevTools");
     }
 
     // 验证 CLI 路径是否存在且可执行
     try {
       await fs.promises.access(cliPath, fs.constants.X_OK);
     } catch {
-      log.warn(`CLI path not found or not executable: ${cliPath}`);
-      return;
+      throw new Error(`CLI path not found or not executable: ${cliPath}`);
     }
 
     const { spawn } = await import("child_process");
