@@ -807,9 +807,20 @@ B. 帮我打开开发者工具
 C. 直接输入项目路径`;
   }
 
+  private getDefaultCliPath(): string | undefined {
+    if (process.platform === 'darwin') {
+      return '/Applications/wechatwebdevtools.app/Contents/MacOS/cli';
+    } else if (process.platform === 'win32') {
+      return 'C:\\Program Files (x86)\\Tencent\\微信web开发者工具\\cli.bat';
+    }
+    return undefined;
+  }
+
   private async launchDevTools(config: WeappConnectionConfig, log: { info: (msg: string) => void; warn: (msg: string) => void }): Promise<void> {
-    if (!config.cliPath) {
-      log.warn("cliPath not configured, cannot auto launch DevTools");
+    // 使用配置的 cliPath 或平台默认路径
+    const cliPath = config.cliPath || this.getDefaultCliPath();
+    if (!cliPath) {
+      log.warn("cliPath not configured and no default path for this platform, cannot auto launch DevTools");
       return;
     }
     if (!config.projectPath) {
@@ -817,35 +828,64 @@ C. 直接输入项目路径`;
       return;
     }
 
+    // 验证 CLI 路径是否存在且可执行
+    try {
+      await fs.promises.access(cliPath, fs.constants.X_OK);
+    } catch {
+      log.warn(`CLI path not found or not executable: ${cliPath}`);
+      return;
+    }
+
     const { spawn } = await import("child_process");
     
     // Windows 上执行 bat 文件需要用 cmd /c
     const isWindows = process.platform === "win32";
+    const isMac = process.platform === "darwin";
     // auto 命令使用 --auto-port 指定自动化端口
-    const batFileArgs = [
+    const autoArgs = [
       "auto",
       "--project", config.projectPath,
       "--auto-port", String(config.port ?? 9420),
     ];
     
     if (config.account) {
-      batFileArgs.push("--auto-account", config.account);
+      autoArgs.push("--auto-account", config.account);
     }
     if (config.ticket) {
-      batFileArgs.push("--ticket", config.ticket);
+      autoArgs.push("--ticket", config.ticket);
     }
     if (config.trustProject) {
-      batFileArgs.push("--trust-project");
+      autoArgs.push("--trust-project");
     }
     if (config.args) {
-      batFileArgs.push(...config.args);
+      autoArgs.push(...config.args);
     }
     
-    // Windows 上使用 cmd /c 执行 bat 文件
-    const command = isWindows ? "cmd.exe" : config.cliPath;
-    const commandArgs = isWindows ? ["/c", config.cliPath, ...batFileArgs] : [config.cliPath, ...batFileArgs];
+    // 根据平台选择执行方式
+    let command: string;
+    let commandArgs: string[];
     
-    log.info(`Launching: ${isWindows ? `cmd.exe /c ${config.cliPath}` : config.cliPath} ${batFileArgs.join(" ")}`);
+    if (isWindows) {
+      // Windows: 使用 cmd /c 执行 bat 文件
+      command = "cmd.exe";
+      commandArgs = ["/c", cliPath, ...autoArgs];
+    } else if (isMac) {
+      // macOS: 使用 open 命令打开应用并传递参数（解决路径空格问题）
+      command = "open";
+      commandArgs = ["-a", "wechatwebdevtools", "--args", ...autoArgs];
+    } else {
+      // 其他 POSIX 系统: 直接执行 CLI
+      command = cliPath;
+      commandArgs = autoArgs;
+    }
+    
+    // 构建日志中的命令字符串
+    const logCommand = isWindows 
+      ? `cmd.exe /c ${cliPath}` 
+      : isMac 
+        ? `open -a wechatwebdevtools --args ${autoArgs.join(" ")}`
+        : `${cliPath} ${autoArgs.join(" ")}`;
+    log.info(`Launching: ${logCommand}`);
     
     const proc = spawn(command, commandArgs, {
       cwd: config.cwd,
