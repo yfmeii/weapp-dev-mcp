@@ -496,27 +496,61 @@ export class WeappAutomatorManager {
   
   /**
    * 从 WeappLocalData/*.json 读取项目（PRD要求的新路径）
+   * 支持 Windows 和 macOS 平台
    */
   private async listProjectsFromWeappLocalData(): Promise<{ path: string; name: string }[]> {
     const projects: { path: string; name: string }[] = [];
     
-    // 定位 WeappLocalData 目录
-    // C:\Users\{username}\AppData\Local\微信开发者工具\User Data\{hash}\WeappLocalData\
-    const userDataPath = path.join(
-      os.homedir(),
-      "AppData",
-      "Local",
-      "微信开发者工具",
-      "User Data"
-    );
+    // 定位 WeappLocalData 目录的父目录
+    let userDataBasePath: string;
+    
+    if (process.platform === 'darwin') {
+      // macOS 路径1: ~/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/
+      // macOS 路径2: ~/Library/Application Support/微信开发者工具/
+      const macOSPath1 = path.join(
+        os.homedir(),
+        "Library",
+        "Containers",
+        "com.tencent.xinWeChat",
+        "Data",
+        "Library",
+        "Application Support",
+        "com.tencent.xinWeChat"
+      );
+      const macOSPath2 = path.join(
+        os.homedir(),
+        "Library",
+        "Application Support",
+        "微信开发者工具"
+      );
+      
+      // 优先使用路径1，不存在则尝试路径2
+      try {
+        await fs.promises.access(macOSPath1);
+        userDataBasePath = macOSPath1;
+      } catch {
+        userDataBasePath = macOSPath2;
+      }
+      console.log(`[MpListProjects] macOS 平台，使用路径: ${userDataBasePath}`);
+    } else {
+      // Windows: C:\Users\{username}\AppData\Local\微信开发者工具\User Data
+      userDataBasePath = path.join(
+        os.homedir(),
+        "AppData",
+        "Local",
+        "微信开发者工具",
+        "User Data"
+      );
+      console.log(`[MpListProjects] Windows 平台，使用路径: ${userDataBasePath}`);
+    }
     
     // 查找所有 hash 子目录（可能有多个）
     const weappLocalDataPaths: string[] = [];
     try {
-      const entries = await fs.promises.readdir(userDataPath, { withFileTypes: true });
+      const entries = await fs.promises.readdir(userDataBasePath, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isDirectory() && /^[a-f0-9]{32}$/i.test(entry.name)) {
-          weappLocalDataPaths.push(path.join(userDataPath, entry.name, "WeappLocalData"));
+          weappLocalDataPaths.push(path.join(userDataBasePath, entry.name, "WeappLocalData"));
         }
       }
     } catch (error) {
