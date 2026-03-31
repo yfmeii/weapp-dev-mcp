@@ -508,9 +508,13 @@ export class WeappAutomatorManager {
     let userDataBasePath: string;
     
     if (process.platform === 'darwin') {
-      // macOS 路径1: ~/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/
-      // macOS 路径2: ~/Library/Application Support/{WECHAT_DEVTOOLS_DIR}/
       const macOSPath1 = path.join(
+        os.homedir(),
+        "Library",
+        "Application Support",
+        WeappAutomatorManager.WECHAT_DEVTOOLS_DIR
+      );
+      const macOSPath2 = path.join(
         os.homedir(),
         "Library",
         "Containers",
@@ -520,14 +524,7 @@ export class WeappAutomatorManager {
         "Application Support",
         "com.tencent.xinWeChat"
       );
-      const macOSPath2 = path.join(
-        os.homedir(),
-        "Library",
-        "Application Support",
-        WeappAutomatorManager.WECHAT_DEVTOOLS_DIR
-      );
       
-      // 优先使用路径1，不存在则尝试路径2
       try {
         await fs.promises.access(macOSPath1);
         userDataBasePath = macOSPath1;
