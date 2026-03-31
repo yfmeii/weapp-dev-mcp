@@ -1,5 +1,5 @@
 {
-  "name": "@xiaoxiamimengfb/weapp-dev-mcp",
+  "name": "@yfme/weapp-dev-mcp",
   "version": "0.3.0",
   "description": "FastMCP server for automating WeChat Mini Program developer tooling - Enhanced with auto-launch and stability fixes",
   "type": "module",

@@ -183,21 +183,52 @@ function createWaitForElementTool(manager: WeappAutomatorManager): AnyTool {
         context.log,
         { overrides: args.connection },
         async (page) => {
+          if (typeof page.$$ !== "function") {
+            throw new UserError("当前页面不支持查询元素数组。");
+          }
+
           const startTime = Date.now();
           const timeout = args.timeout;
           const retryInterval = args.retryInterval;
-          
+
+          let selector = args.selector;
+          let indexHint: number | undefined;
+
+          const parsed = parseSelectorWithIndex(selector);
+          if (parsed) {
+            selector = parsed.baseSelector;
+            indexHint = parsed.index;
+          }
+
           while (Date.now() - startTime < timeout) {
             try {
-              const element = await page.$(args.selector);
-              if (element) {
-                return toTextResult(`已等待元素选择器 "${args.selector}" 出现 (耗时 ${Date.now() - startTime}ms)。`);
+              let elements = await page.$$(selector);
+              if (!Array.isArray(elements) || elements.length === 0) {
+              } else if (indexHint !== undefined) {
+                if (indexHint >= 0 && indexHint < elements.length) {
+                  return toTextResult(formatJson({
+                    selector: args.selector,
+                    index: indexHint,
+                    found: true,
+                    waitTime: Date.now() - startTime,
+                  }));
+                }
+                throw new UserError(`索引 ${indexHint} 超出范围 (0-${elements.length - 1})。`);
+              } else {
+                return toTextResult(formatJson({
+                  selector: args.selector,
+                  found: true,
+                  waitTime: Date.now() - startTime,
+                }));
               }
-            } catch {
+            } catch (error) {
+              if (error instanceof UserError) {
+                throw error;
+              }
             }
             await new Promise(resolve => setTimeout(resolve, retryInterval));
           }
-          
+
           throw new UserError(`等待元素 "${args.selector}" 超时 (${timeout}ms)。`);
         }
       );
