@@ -43,6 +43,9 @@ export class WeappAutomatorManager {
     ".weapp-dev-mcp-config.json"
   );
 
+  // 微信开发者工具目录名称（跨平台常量）
+  private static readonly WECHAT_DEVTOOLS_DIR = "微信开发者工具";
+
   /**
    * 设置待选择项目列表（用于交互式选择）
    */
@@ -506,7 +509,7 @@ export class WeappAutomatorManager {
     
     if (process.platform === 'darwin') {
       // macOS 路径1: ~/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/
-      // macOS 路径2: ~/Library/Application Support/微信开发者工具/
+      // macOS 路径2: ~/Library/Application Support/{WECHAT_DEVTOOLS_DIR}/
       const macOSPath1 = path.join(
         os.homedir(),
         "Library",
@@ -521,7 +524,7 @@ export class WeappAutomatorManager {
         os.homedir(),
         "Library",
         "Application Support",
-        "微信开发者工具"
+        WeappAutomatorManager.WECHAT_DEVTOOLS_DIR
       );
       
       // 优先使用路径1，不存在则尝试路径2
@@ -533,12 +536,12 @@ export class WeappAutomatorManager {
       }
       console.log(`[MpListProjects] macOS 平台，使用路径: ${userDataBasePath}`);
     } else {
-      // Windows: C:\Users\{username}\AppData\Local\微信开发者工具\User Data
+      // Windows: C:\Users\{username}\AppData\Local\{WECHAT_DEVTOOLS_DIR}\User Data
       userDataBasePath = path.join(
         os.homedir(),
         "AppData",
         "Local",
-        "微信开发者工具",
+        WeappAutomatorManager.WECHAT_DEVTOOLS_DIR,
         "User Data"
       );
       console.log(`[MpListProjects] Windows 平台，使用路径: ${userDataBasePath}`);
