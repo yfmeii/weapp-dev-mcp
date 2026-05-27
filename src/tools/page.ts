@@ -28,8 +28,6 @@ const callPageMethodParameters = connectionContainerSchema.extend({
   args: z.array(z.unknown()).optional(),
 });
 
-const getRendererParameters = connectionContainerSchema;
-
 const waitForElementParameters = connectionContainerSchema.extend({
   selector: z.string().trim().min(1),
   timeout: z.coerce.number().int().positive().optional().default(5000),
@@ -60,7 +58,6 @@ export function createPageTools(manager: WeappAutomatorManager): AnyTool[] {
     createGetPageDataTool(manager),
     createSetPageDataTool(manager),
     createCallPageMethodTool(manager),
-    createGetRendererTool(manager),
   ];
 }
 
@@ -364,45 +361,6 @@ function createCallPageMethodTool(manager: WeappAutomatorManager): AnyTool {
               method: args.method,
               arguments: callArgs,
               result: toSerializableValue(result),
-            })
-          );
-        }
-      );
-      }),
-  };
-}
-
-function createGetRendererTool(manager: WeappAutomatorManager): AnyTool {
-  return {
-    name: "page_getRenderer",
-    description: "获取当前页面运行时渲染引擎，返回 webview 或 skyline。",
-    parameters: getRendererParameters,
-    execute: async (rawArgs, context: ToolContext) =>
-      withUserErrorResult(async () => {
-      const args = getRendererParameters.parse(rawArgs ?? {});
-      return manager.withMiniProgram<ContentResult>(
-        context.log,
-        { overrides: args.connection },
-        async (miniProgram) => {
-          let skylineInfo;
-          try {
-            skylineInfo = await miniProgram.callWxMethod("getSkylineInfoSync");
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            throw new UserError(`调用 wx.getSkylineInfoSync() 失败: ${message}`);
-          }
-
-          const isSupported =
-            typeof skylineInfo === "object" &&
-            skylineInfo !== null &&
-            "isSupported" in skylineInfo &&
-            Boolean((skylineInfo as { isSupported?: unknown }).isSupported);
-          const renderer = isSupported ? "skyline" : "webview";
-
-          return toTextResult(
-            formatJson({
-              renderer,
-              skylineInfo: toSerializableValue(skylineInfo),
             })
           );
         }

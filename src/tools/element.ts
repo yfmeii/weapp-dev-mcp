@@ -596,8 +596,7 @@ function createGetAttributesTool(manager: WeappAutomatorManager): AnyTool {
 function createGetBoundingClientRectTool(manager: WeappAutomatorManager): AnyTool {
   return {
     name: "element_getBoundingClientRect",
-    description: "获取元素相对于视口的边界矩形信息（left、top、width、height、right、bottom）。此方法返回的是考虑 CSS transform 变换后的实际渲染尺寸和位置。仅支持 ID 选择器、类选择器。" +
-        "若目标元素位于自定义组件内部，selector 必须指向「当前页面 wxml 源码中直接引用的那一层自定义组件，而非渲染后的组件树」，innerSelector 可在 selector 所指组件的整个子树内匹配。",
+    description: "获取元素相对于视口的边界矩形信息（left、top、width、height、right、bottom）。此方法返回的是考虑 CSS transform 变换后的实际渲染尺寸和位置。仅支持 ID 选择器、类选择器。若目标元素位于自定义组件内部，selector 必须指向当前页面 WXML 源码中直接引用的那一层自定义组件，而不是渲染后的组件树；innerSelector 可在 selector 所指组件的整个子树内匹配。",
     parameters: getBoundingClientRectParameters,
     execute: async (rawArgs, context: ToolContext) =>
       withUserErrorResult(async () => {
