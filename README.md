@@ -76,6 +76,8 @@ npx weapp-dev-mcp
       "mcp__weapp-dev-mcp__mp_setDefaultProject",
       "mcp__weapp-dev-mcp__page_getElement",
       "mcp__weapp-dev-mcp__page_getElements",
+      "mcp__weapp-dev-mcp__page_getElementByXpath",
+      "mcp__weapp-dev-mcp__page_getElementsByXpath",
       "mcp__weapp-dev-mcp__page_waitElement",
       "mcp__weapp-dev-mcp__page_waitTimeout",
       "mcp__weapp-dev-mcp__page_getData",
@@ -175,6 +177,8 @@ npx weapp-dev-mcp
 
 - `page_getElement` – 通过选择器获取页面元素，返回元素摘要信息（tagName、text、value、size、offset）；设置 `withWxml: true` 可额外返回完整 outerWxml；**支持 [index=N] 语法选择第 N 个元素**
 - `page_getElements` – 通过选择器获取页面元素数组，返回每个元素的摘要信息；设置 `withWxml: true` 可额外返回每个元素的完整 outerWxml；**支持 [index=N] 语法**
+- `page_getElementByXpath` – 通过 XPath 获取页面第一个匹配元素，适合按文本、属性、层级关系、ancestor/following 等表达式定位；设置 `withWxml: true` 可额外返回完整 outerWxml
+- `page_getElementsByXpath` – 通过 XPath 获取页面匹配元素数组，返回每个元素的摘要信息；设置 `withWxml: true` 可额外返回每个元素的完整 outerWxml
 - `page_waitElement` – 等待元素出现在页面上（⚠️ 不适用于自定义组件内部元素）；**支持 [index=N] 语法；增加超时和重试间隔参数**
 - `page_waitTimeout` – 等待指定的毫秒数
 - `page_getData` – 获取当前页面的数据对象，可指定路径（**支持嵌套路径如 'user.name'**）
