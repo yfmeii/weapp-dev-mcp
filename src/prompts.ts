@@ -41,7 +41,7 @@ export function createPrompts(): WeappPrompt[] {
           "After connection succeeds:",
           "- Call mp_currentPage.",
           "- Call mp_screenshot.",
-          "- If needed, use page_getElements or page_getElement to inspect the UI tree.",
+          "- If needed, use page_getElements/page_getElement or page_getElementsByXpath/page_getElementByXpath to inspect the UI tree.",
           `- Report the current page path and whether the requested home-page UI is visible.${target}`,
           "",
           "If connection fails twice, stop and report the exact MCP error instead of looping.",

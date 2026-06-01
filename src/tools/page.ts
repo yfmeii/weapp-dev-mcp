@@ -49,10 +49,22 @@ const getElementsParameters = connectionContainerSchema.extend({
   withWxml: z.boolean().optional().default(false),
 });
 
+const getElementByXpathParameters = connectionContainerSchema.extend({
+  xpath: z.string().trim().min(1),
+  withWxml: z.boolean().optional().default(false),
+});
+
+const getElementsByXpathParameters = connectionContainerSchema.extend({
+  xpath: z.string().trim().min(1),
+  withWxml: z.boolean().optional().default(false),
+});
+
 export function createPageTools(manager: WeappAutomatorManager): AnyTool[] {
   return [
     createGetElementTool(manager),
     createGetElementsTool(manager),
+    createGetElementByXpathTool(manager),
+    createGetElementsByXpathTool(manager),
     createWaitForElementTool(manager),
     createWaitForTimeoutTool(manager),
     createGetPageDataTool(manager),
@@ -194,6 +206,88 @@ function createGetElementsTool(manager: WeappAutomatorManager): AnyTool {
           return toTextResult(
             formatJson({
               selector: args.selector,
+              count: elements.length,
+              elements: elementsInfo,
+            })
+          );
+        }
+      );
+      }),
+  };
+}
+
+function createGetElementByXpathTool(manager: WeappAutomatorManager): AnyTool {
+  return {
+    name: "page_getElementByXpath",
+    description: "通过 XPath 获取页面第一个匹配元素，相当于 page.getElementByXpath(xpath) / page.xpath(xpath)。适合按文本、层级关系、ancestor/following 等 XPath 表达式定位元素；设置 withWxml 为 true 可额外返回完整 outerWxml。",
+    parameters: getElementByXpathParameters,
+    execute: async (rawArgs, context: ToolContext) =>
+      withUserErrorResult(async () => {
+      const args = getElementByXpathParameters.parse(rawArgs ?? {});
+      return manager.withPage<ContentResult>(
+        context.log,
+        { overrides: args.connection },
+        async (page) => {
+          if (typeof page.getElementByXpath !== "function") {
+            throw new UserError("当前页面不支持 XPath 单元素查询。");
+          }
+
+          const element = await page.getElementByXpath(args.xpath);
+          if (!element) {
+            throw new UserError(`XPath 未找到元素: "${args.xpath}"`);
+          }
+
+          const summary = await summarizeElement(element, {
+            withWxml: args.withWxml,
+          });
+          return toTextResult(
+            formatJson({
+              xpath: args.xpath,
+              ...summary,
+            })
+          );
+        }
+      );
+      }),
+  };
+}
+
+function createGetElementsByXpathTool(manager: WeappAutomatorManager): AnyTool {
+  return {
+    name: "page_getElementsByXpath",
+    description: "通过 XPath 获取页面匹配元素数组，相当于 page.getElementsByXpath(xpath)。适合按文本、属性、层级关系、位置函数等 XPath 表达式批量定位元素；设置 withWxml 为 true 可额外返回每个元素的完整 outerWxml。",
+    parameters: getElementsByXpathParameters,
+    execute: async (rawArgs, context: ToolContext) =>
+      withUserErrorResult(async () => {
+      const args = getElementsByXpathParameters.parse(rawArgs ?? {});
+      return manager.withPage<ContentResult>(
+        context.log,
+        { overrides: args.connection },
+        async (page) => {
+          if (typeof page.getElementsByXpath !== "function") {
+            throw new UserError("当前页面不支持 XPath 元素数组查询。");
+          }
+
+          const elements = await page.getElementsByXpath(args.xpath);
+          if (!Array.isArray(elements)) {
+            throw new UserError(`查询 XPath "${args.xpath}" 失败。`);
+          }
+
+          const elementsInfo = await Promise.all(
+            elements.map(async (el: any, index: number) => {
+              const summary = await summarizeElement(el, {
+                withWxml: args.withWxml,
+              });
+              return {
+                index,
+                ...summary,
+              };
+            })
+          );
+
+          return toTextResult(
+            formatJson({
+              xpath: args.xpath,
               count: elements.length,
               elements: elementsInfo,
             })
