@@ -44,6 +44,23 @@ const callWxMethodParameters = connectionContainerSchema.extend({
   args: z.array(z.unknown()).optional(),
 });
 
+const requestMockRuleSchema = z.object({
+  url: z.string().trim().min(1),
+  match: z.enum(["contains", "exact", "regex"]).optional().default("contains"),
+  method: z.string().trim().min(1).optional(),
+  statusCode: z.coerce.number().int().min(100).max(599).optional().default(200),
+  data: z.unknown().optional(),
+  header: z.record(z.string(), z.unknown()).optional(),
+  cookies: z.array(z.string()).optional(),
+  delayMs: z.coerce.number().int().nonnegative().optional().default(0),
+});
+
+const mockWxMethodParameters = connectionContainerSchema.extend({
+  action: z.enum(["mock", "restore"]).optional().default("mock"),
+  method: z.enum(["request"]).optional().default("request"),
+  requestRules: z.array(requestMockRuleSchema).optional(),
+});
+
 const getConsoleLogsParameters = connectionContainerSchema.extend({
   clear: z.coerce.boolean().optional().default(false),
 });
@@ -66,6 +83,7 @@ export function createApplicationTools(
     createNavigateTool(manager),
     createScreenshotTool(manager),
     createCallWxMethodTool(manager),
+    createMockWxMethodTool(manager),
     createGetConsoleLogsTool(manager),
     createCurrentPageTool(manager),
     createListProjectsTool(manager),
@@ -258,6 +276,128 @@ function createCallWxMethodTool(manager: WeappAutomatorManager): AnyTool {
               method: args.method,
               arguments: callArgs,
               result: toSerializableValue(result),
+            })
+          );
+        }
+      );
+      }),
+  };
+}
+
+function createMockWxMethodTool(manager: WeappAutomatorManager): AnyTool {
+  return {
+    name: "mp_mockWxMethod",
+    description:
+      "有限 mock wx 方法能力。当前仅支持 method=request：action=mock 时按 requestRules mock wx.request 成功响应；action=restore 时恢复 wx.request。未匹配请求默认透传原始 wx.request。",
+    parameters: mockWxMethodParameters,
+    execute: async (rawArgs, context: ToolContext) =>
+      withUserErrorResult(async () => {
+      const args = mockWxMethodParameters.parse(rawArgs ?? {});
+
+      return manager.withMiniProgram<ContentResult>(
+        context.log,
+        { overrides: args.connection },
+        async (miniProgram) => {
+          if (args.action === "restore") {
+            await miniProgram.restoreWxMethod(args.method);
+            return toTextResult(
+              formatJson({
+                action: args.action,
+                method: args.method,
+                restored: true,
+              })
+            );
+          }
+
+          const rules = args.requestRules ?? [];
+          if (rules.length === 0) {
+            return toErrorResult(
+              "action=mock 时 requestRules 至少需要提供一条规则。"
+            );
+          }
+
+          await miniProgram.mockWxMethod(
+            args.method,
+            function (
+              this: {
+                origin: (options: unknown) => unknown;
+              },
+              options: {
+                url?: string;
+                method?: string;
+              },
+              config: {
+                rules: Array<{
+                  url: string;
+                  match: "contains" | "exact" | "regex";
+                  method?: string;
+                  statusCode: number;
+                  data?: unknown;
+                  header?: Record<string, unknown>;
+                  cookies?: string[];
+                  delayMs: number;
+                }>;
+              }
+            ) {
+              const requestOptions = options || {};
+              const requestUrl = String(requestOptions.url || "");
+              const requestMethod = String(
+                requestOptions.method || "GET"
+              ).toUpperCase();
+
+              const rule = config.rules.find((item) => {
+                if (
+                  item.method &&
+                  item.method.toUpperCase() !== requestMethod
+                ) {
+                  return false;
+                }
+                if (item.match === "exact") {
+                  return requestUrl === item.url;
+                }
+                if (item.match === "regex") {
+                  return new RegExp(item.url).test(requestUrl);
+                }
+                return requestUrl.includes(item.url);
+              });
+
+              if (!rule) {
+                return this.origin(requestOptions);
+              }
+
+              return new Promise((resolve) => {
+                const response = {
+                  errMsg: "request:ok",
+                  statusCode: rule.statusCode,
+                  data: rule.data,
+                  header: rule.header || {},
+                  cookies: rule.cookies || [],
+                };
+
+                if (rule.delayMs > 0) {
+                  setTimeout(() => resolve(response), rule.delayMs);
+                } else {
+                  resolve(response);
+                }
+              });
+            },
+            {
+              rules: rules.map((rule) => ({
+                ...rule,
+                match: rule.match ?? "contains",
+                statusCode: rule.statusCode ?? 200,
+                delayMs: rule.delayMs ?? 0,
+              })),
+            }
+          );
+
+          return toTextResult(
+            formatJson({
+              action: args.action,
+              method: args.method,
+              mocked: true,
+              ruleCount: rules.length,
+              passThrough: true,
             })
           );
         }

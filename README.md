@@ -70,6 +70,7 @@ npx weapp-dev-mcp
       "mcp__weapp-dev-mcp__mp_navigate",
       "mcp__weapp-dev-mcp__mp_screenshot",
       "mcp__weapp-dev-mcp__mp_callWx",
+      "mcp__weapp-dev-mcp__mp_mockWxMethod",
       "mcp__weapp-dev-mcp__mp_getLogs",
       "mcp__weapp-dev-mcp__mp_currentPage",
       "mcp__weapp-dev-mcp__mp_listProjects",
@@ -168,6 +169,7 @@ npx weapp-dev-mcp
 - `mp_navigate` – 在小程序内导航，支持 `navigateTo`、`redirectTo`、`reLaunch`、`switchTab` 或 `navigateBack`
 - `mp_screenshot` – 捕获屏幕截图并返回（或保存到磁盘）
 - `mp_callWx` – 调用微信小程序 API 方法（如 `wx.showToast`）
+- `mp_mockWxMethod` – 有限 mock `wx` 方法能力；当前支持 `method: "request"`，通过 `action: "mock"` 设置 `wx.request` 规则，通过 `action: "restore"` 恢复原方法
 - `mp_getLogs` – 获取小程序控制台日志，可选择获取后清除
 - `mp_currentPage` – 获取当前页面信息（路径、查询参数、尺寸、滚动位置），`withData` 为 true 时额外返回页面数据
 - `mp_listProjects` – 列出微信开发者工具中的最近项目，方便选择项目目录
@@ -201,6 +203,38 @@ npx weapp-dev-mcp
 - `element_getBoundingClientRect` – 获取元素相对于视口的边界矩形信息（left、top、width、height、right、bottom），考虑 CSS transform 变换（目前仅支持 ID 选择器、类选择器）
 
 每个工具都接受可选的 `connection` 块来覆盖环境默认值（项目路径、CLI 路径、WebSocket 端点等）。
+
+### Mock 网络请求
+
+`mp_mockWxMethod` 只开放少量安全的 `mockWxMethod` 能力，当前用于 mock `wx.request`。同一个工具同时支持设置和恢复：
+
+```json
+{
+  "action": "mock",
+  "method": "request",
+  "requestRules": [
+    {
+      "url": "/api/user",
+      "match": "contains",
+      "method": "GET",
+      "statusCode": 200,
+      "data": {
+        "id": 1,
+        "name": "test"
+      }
+    }
+  ]
+}
+```
+
+`match` 支持 `contains`、`exact`、`regex`。命中规则的请求会返回配置的成功响应；未命中规则时透传原始 `wx.request`。需要恢复时：
+
+```json
+{
+  "action": "restore",
+  "method": "request"
+}
+```
 
 
 ## 使用技巧
