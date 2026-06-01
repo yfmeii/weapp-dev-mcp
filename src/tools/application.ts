@@ -299,7 +299,7 @@ function createCurrentPageTool(manager: WeappAutomatorManager): AnyTool {
   return {
     name: "mp_currentPage",
     description:
-      "获取当前页面的信息，包括路径、查询参数、尺寸和滚动位置。通常在 mp_ensureConnection 成功后立即调用，用于确认当前页面。withData 为 true 时额外返回页面数据。",
+      "获取当前页面的信息，包括路径、查询参数、尺寸、滚动位置、当前页面真实渲染器 renderer，以及 wx.getSkylineInfoSync() 的 Skyline 诊断信息 skylineInfo。通常在 mp_ensureConnection 成功后立即调用，用于确认当前页面；可通过 renderer 区分 webview/skyline，skylineInfo 仅用于判断运行环境能力。withData 为 true 时额外返回页面数据。",
     parameters: currentPageParameters,
     execute: async (rawArgs, context: ToolContext) =>
       withUserErrorResult(async () => {
@@ -318,11 +318,43 @@ function createCurrentPageTool(manager: WeappAutomatorManager): AnyTool {
             page.scrollTop().catch(() => null),
           ]);
 
+          const runtimeInfo = await miniProgram
+            .evaluate(() => {
+              const runtime = globalThis as typeof globalThis & {
+                getCurrentPages?: () => Array<{ renderer?: unknown }>;
+                wx?: {
+                  getSkylineInfoSync?: () => unknown;
+                };
+              };
+
+              const pages =
+                typeof runtime.getCurrentPages === "function"
+                  ? runtime.getCurrentPages()
+                  : [];
+              const currentPage = pages[pages.length - 1];
+
+              let skylineInfo: unknown = null;
+              if (typeof runtime.wx?.getSkylineInfoSync === "function") {
+                skylineInfo = runtime.wx.getSkylineInfoSync();
+              }
+
+              return {
+                renderer: currentPage?.renderer ?? null,
+                skylineInfo,
+              };
+            })
+            .catch(() => ({
+              renderer: null,
+              skylineInfo: null,
+            }));
+
           const result: Record<string, unknown> = {
             path: page.path,
             query: toSerializableValue(page.query),
             size: toSerializableValue(size),
             scrollTop: toSerializableValue(scrollTop),
+            renderer: toSerializableValue(runtimeInfo.renderer),
+            skylineInfo: toSerializableValue(runtimeInfo.skylineInfo),
           };
 
           if (args.withData) {
