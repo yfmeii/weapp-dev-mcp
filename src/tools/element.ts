@@ -605,7 +605,7 @@ function createGetBoundingClientRectTool(manager: WeappAutomatorManager): AnyToo
       const { selector, innerSelector } = args;
 
       if (!isValidIdOrClassSelector(selector)) {
-        throw new UserError("selector 仅支持 ID 选择器 (以 '#' 开头) 或类选择器 (以 '.' 开头)。若需选择自定义组件，请保证代码对组件赋值了 id 并使用 id 选择器。");
+        throw new UserError("selector 仅支持 ID 选择器 (以 '#' 开头) 或类选择器 (以 '.' 开头)。若目标元素位于自定义组件内部，selector 必须指向当前页面 WXML 源码中直接引用的那一层自定义组件，而不是渲染后的组件树。");
       }
       if (innerSelector && !isValidIdOrClassSelector(innerSelector)) {
         throw new UserError("innerSelector 仅支持 ID 选择器 (以 '#' 开头) 或类选择器 (以 '.' 开头)。");
