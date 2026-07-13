@@ -2,6 +2,45 @@
 
 基于 FastMCP 的服务器，通过 [`miniprogram-automator`](https://www.npmjs.com/package/miniprogram-automator) 自动化微信开发者工具。该服务器提供 MCP 工具，让 AI 助手能够导航、检查和操作小程序页面——类似于 `playwright-mcp`，但专为微信生态系统定制。
 
+## ⚠️ 官方已下场：建议迁移到微信开发者工具 Skill
+
+**微信官方已正式推出「微信开发者工具 Skill」并开启公测**，可在 Cursor / Claude 等 AI Agent 环境中直接操作开发者工具：打开项目、编译、模拟器、日志排查、预览上传、云开发等，无需在 IDE 与开发者工具之间反复横跳。
+
+### 为什么建议迁移？
+
+- **官方维护与版本同步**：Skill 随开发者工具 Nightly 发布，与工具能力对齐，不必再维护一套第三方 MCP。
+- **覆盖面更广**：不止页面自动化，还包括项目导入、编译构建、真机预览、上传、云环境等。
+- **更贴近真实工作流**：Agent 可直接驱动开发者工具完成「写代码 → 编译 → 看模拟器 / 日志 → 预览」闭环。
+
+### 官方接入（两步）
+
+1. **升级开发者工具**  
+   下载 [Nightly Electron Build **2.02.2607032** 及以上](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)。
+
+2. **安装 Skill（二选一）**  
+   - **命令行（推荐）**：终端执行 `wechatide`，把输出的 Skill 目录交给你的 AI Agent 安装。  
+   - **图形界面**：开发者工具菜单 → **「导出开发者工具 Skill」** → 导入到 Agent。
+
+macOS 上 Skill 常见路径示例：
+
+```text
+/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/miniprogram-dev-skill
+```
+
+调用示例（具体以 `wechatide` / Skill 文档为准）：
+
+```bash
+wechatide                                    # 查看 Skill 路径与可用工具
+wechatide -c Cursor -t check_devtools_status # 检查登录与环境
+```
+
+### 相关链接
+
+- 公测公告：[微信开发者工具 Skill 开启公测啦！](https://developers.weixin.qq.com/community/develop/doc/000e4a112a80103ee355ee95361800)
+- 场景与使用细节：见公告中的官方文档入口；本地以开发者工具内置 `miniprogram-dev-skill` 的 `SKILL.md` 为准。
+
+---
+
 ## 前置要求
 
 - 已安装微信开发者工具，支持命令行访问（`cli` / `cli.bat`）
@@ -167,7 +206,7 @@ npx weapp-dev-mcp
 
 - `mp_ensureConnection` – 确保自动化会话就绪；可选择强制重连或覆盖连接设置
 - `mp_navigate` – 在小程序内导航，支持 `navigateTo`、`redirectTo`、`reLaunch`、`switchTab` 或 `navigateBack`
-- `mp_screenshot` – 捕获屏幕截图并返回（或保存到磁盘）
+- `mp_screenshot` – 捕获屏幕截图并返回（或保存到磁盘）；若微信开发者工具的自动化截图接口失败或超时，请改用客户端/系统提供的截图 API 截取开发者工具模拟器区域
 - `mp_callWx` – 调用微信小程序 API 方法（如 `wx.showToast`）
 - `mp_mockWxMethod` – 有限 mock `wx` 方法能力；当前支持 `method: "request"`，通过 `action: "mock"` 设置 `wx.request` 规则，通过 `action: "restore"` 恢复原方法
 - `mp_getLogs` – 获取小程序控制台日志，可选择获取后清除
@@ -200,9 +239,23 @@ npx weapp-dev-mcp
 - `element_getStyles` – 获取元素的 CSS 样式值，names 参数为样式名数组（如 `['color', 'fontSize']`）
 - `element_scrollTo` – 滚动 scroll-view 组件到指定位置（x, y）
 - `element_getAttributes` – 获取元素的特性值，names 参数为特性名数组（如 `['class', 'id', 'data-index']`）
-- `element_getBoundingClientRect` – 获取元素相对于视口的边界矩形信息（left、top、width、height、right、bottom），考虑 CSS transform 变换（目前仅支持 ID 选择器、类选择器）
+- `element_getBoundingClientRect` – 获取元素相对于视口的边界矩形信息（left、top、width、height、right、bottom），考虑 CSS transform 变换；选择器支持微信小程序 SelectorQuery 子集（ID、class、连续 class、子代、后代、跨自定义组件后代和并集选择器）
 
 每个工具都接受可选的 `connection` 块来覆盖环境默认值（项目路径、CLI 路径、WebSocket 端点等）。
+
+#### `element_getBoundingClientRect` 选择器规则
+
+`selector` 和 `innerSelector` 使用微信小程序 `SelectorQuery.select` 的选择器子集：
+
+- ID 选择器：`#the-id`
+- class 选择器：`.a-class`
+- 连续 class：`.a-class.another-class`
+- 子代选择器：`.the-parent > .the-child`
+- 后代选择器：`.the-ancestor .the-descendant`
+- 跨自定义组件后代选择器：`.the-ancestor >>> .the-descendant`
+- 多选择器并集：`#a-node, .some-other-nodes`
+
+不支持标签选择器（如 `view`）、属性选择器、伪类、相邻/兄弟选择器。若目标元素位于自定义组件内部，建议 `selector` 指向当前页面 WXML 中直接引用的组件节点，再用 `innerSelector` 定位组件内部元素。
 
 ### Mock 网络请求
 
