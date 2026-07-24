@@ -294,3 +294,8 @@ export function parseSelectorWithIndex(selector: string): { baseSelector: string
   }
   return null;
 }
+
+export function isValidIdOrClassSelector(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.startsWith("#") || trimmed.startsWith(".");
+}
